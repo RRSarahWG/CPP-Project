@@ -1,35 +1,43 @@
-#pragma once
-#include <vector>
+#ifndef THREAD_MANAGER_H
+#define THREAD_MANAGER_H
+
 #include <thread>
-#include <functional>
+#include <vector>
+#include <queue>
 #include <mutex>
 #include <condition_variable>
+#include <functional>
 
 class ThreadManager {
 public:
     ThreadManager(size_t numThreads);
     ~ThreadManager();
-    
+
     void start();
     void stop();
     void addTask(std::function<void()> task);
+    void waitForCompletion();
+
     bool isRunning() const;
     size_t getNumThreads() const;
     void setNumThreads(size_t newNumThreads);
     size_t getTaskCount() const;
-    void waitForCompletion();
     size_t getActiveThreadCount() const;
-    
+
 private:
-    void processNextTask();
     void workerThread();
-    
+
     size_t numThreads;
-    std::atomic<bool> running{false};
+    bool running;
+
     std::vector<std::thread> threads;
     std::queue<std::function<void()>> taskQueue;
-    std::mutex queueMutex;
+
+    mutable std::mutex queueMutex;
     std::condition_variable taskCondition;
+    std::condition_variable completionCondition;
+
     size_t activeThreads;
 };
 
+#endif // THREAD_MANAGER_H

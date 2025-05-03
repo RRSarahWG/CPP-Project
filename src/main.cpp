@@ -33,8 +33,9 @@ struct Particle {
         if (y < 0 || y >= HEIGHT) vy *= -1;
 
         // Keep in bounds
-        x = std::max(0.0f, std::min(x, float(WIDTH - 1)));
-        y = std::max(0.0f, std::min(y, float(HEIGHT - 1)));
+        x = std::max(0.0f, std::min(x, static_cast<float>(WIDTH - 1)));
+        y = std::max(0.0f, std::min(y, static_cast<float>(HEIGHT - 1)));
+        
     }
 };
 

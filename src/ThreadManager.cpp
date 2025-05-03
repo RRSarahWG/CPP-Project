@@ -21,7 +21,7 @@ void ThreadManager::stop() {
     }
     taskCondition.notify_all();
 
-    for (auto &t : threads) {
+    for (auto& t : threads) {
         if (t.joinable()) {
             t.join();
         }
@@ -62,13 +62,13 @@ void ThreadManager::workerThread() {
             ++activeThreads;
         }
 
-        task(); // execute outside lock
+        task(); // execute outside the lock
 
         {
             std::lock_guard<std::mutex> lock(queueMutex);
             --activeThreads;
         }
-        completionCondition.notify_all(); // Notify waiters
+        completionCondition.notify_all();
     }
 }
 
