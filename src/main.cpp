@@ -1,4 +1,4 @@
-#include "../include/Simulation.h"
+/*#include "../include/Simulation.h"
 #include "../include/Config.h"
 #include <iostream>
 #include <chrono>
@@ -171,4 +171,87 @@ int main() {
         return 1;
     }
     return 0;
-} 
+} */
+
+#include <iostream>
+#include <vector>
+#include <thread>
+#include <chrono>
+#include <cstdlib>
+#include <ctime>
+
+const int WIDTH = 80;
+const int HEIGHT = 24;
+const int NUM_PARTICLES = 50;
+const char PARTICLE_CHAR = 'o';
+
+struct Particle {
+    int x, y;
+    int dx, dy;
+};
+
+void clearScreen() {
+    // ANSI escape code to clear the screen
+    std::cout << "\033[2J\033[1;1H";
+}
+
+void initializeParticles(std::vector<Particle>& particles) {
+    for (auto& p : particles) {
+        p.x = rand() % WIDTH;
+        p.y = rand() % HEIGHT;
+        p.dx = (rand() % 3) - 1;  // -1, 0, or 1
+        p.dy = (rand() % 3) - 1;
+    }
+}
+
+void updateParticles(std::vector<Particle>& particles) {
+    for (auto& p : particles) {
+        p.x += p.dx;
+        p.y += p.dy;
+
+        // Boundary conditions
+        if (p.x <= 0 || p.x >= WIDTH - 1) p.dx *= -1;
+        if (p.y <= 0 || p.y >= HEIGHT - 1) p.dy *= -1;
+    }
+}
+
+void render(const std::vector<Particle>& particles) {
+    std::vector<std::vector<char>> grid(HEIGHT, std::vector<char>(WIDTH, ' '));
+
+    // Draw borders
+    for (int x = 0; x < WIDTH; ++x) {
+        grid[0][x] = grid[HEIGHT - 1][x] = '-';
+    }
+    for (int y = 0; y < HEIGHT; ++y) {
+        grid[y][0] = grid[y][WIDTH - 1] = '|';
+    }
+
+    // Draw particles
+    for (const auto& p : particles) {
+        if (p.y > 0 && p.y < HEIGHT - 1 && p.x > 0 && p.x < WIDTH - 1)
+            grid[p.y][p.x] = PARTICLE_CHAR;
+    }
+
+    // Render grid
+    for (const auto& row : grid) {
+        for (const auto& cell : row) {
+            std::cout << cell;
+        }
+        std::cout << '\n';
+    }
+}
+
+int main() {
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    std::vector<Particle> particles(NUM_PARTICLES);
+    initializeParticles(particles);
+
+    while (true) {
+        clearScreen();
+        render(particles);
+        updateParticles(particles);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // delay for animation
+    }
+
+    return 0;
+}
