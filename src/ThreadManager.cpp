@@ -1,13 +1,7 @@
-#include "../include/ThreadManager.h"
-#include <iostream>
-#include <chrono>
+#include "ThreadManager.h"
 
 ThreadManager::ThreadManager(size_t numThreads)
-    : numThreads(numThreads), activeThreads(0) {
-    if (numThreads <= 0) {
-        throw std::invalid_argument("Number of threads must be positive");
-    }
-}
+    : numThreads(numThreads), running(false), activeThreads(0) {}
 
 ThreadManager::~ThreadManager() {
     stop();
@@ -15,30 +9,67 @@ ThreadManager::~ThreadManager() {
 
 void ThreadManager::start() {
     running = true;
-    activeThreads = 0;
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadManager::workerThread, this);
     }
-    std::cout << "Started " << numThreads << " threads." << std::endl;
 }
 
 void ThreadManager::stop() {
-    running = false;
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        running = false;
+    }
     taskCondition.notify_all();
-    
-    for (auto& thread : threads) {
-        if (thread.joinable()) {
-            thread.join();
+
+    for (auto &t : threads) {
+        if (t.joinable()) {
+            t.join();
         }
     }
     threads.clear();
-    std::cout << "Stopped all threads." << std::endl;
 }
 
 void ThreadManager::addTask(std::function<void()> task) {
-    std::lock_guard<std::mutex> lock(queueMutex);
-    taskQueue.push(task);
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        taskQueue.push(std::move(task));
+    }
     taskCondition.notify_one();
+}
+
+void ThreadManager::waitForCompletion() {
+    std::unique_lock<std::mutex> lock(queueMutex);
+    completionCondition.wait(lock, [this]() {
+        return taskQueue.empty() && activeThreads == 0;
+    });
+}
+
+void ThreadManager::workerThread() {
+    while (true) {
+        std::function<void()> task;
+
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            taskCondition.wait(lock, [this]() {
+                return !taskQueue.empty() || !running;
+            });
+
+            if (!running && taskQueue.empty())
+                return;
+
+            task = std::move(taskQueue.front());
+            taskQueue.pop();
+            ++activeThreads;
+        }
+
+        task(); // execute outside lock
+
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            --activeThreads;
+        }
+        completionCondition.notify_all(); // Notify waiters
+    }
 }
 
 bool ThreadManager::isRunning() const {
@@ -50,10 +81,9 @@ size_t ThreadManager::getNumThreads() const {
 }
 
 void ThreadManager::setNumThreads(size_t newNumThreads) {
-    if (newNumThreads <= 0) {
-        throw std::invalid_argument("Number of threads must be positive");
+    if (!running) {
+        numThreads = newNumThreads;
     }
-    numThreads = newNumThreads;
 }
 
 size_t ThreadManager::getTaskCount() const {
@@ -61,31 +91,7 @@ size_t ThreadManager::getTaskCount() const {
     return taskQueue.size();
 }
 
-void ThreadManager::waitForCompletion() {
-    while (getTaskCount() > 0 || activeThreads > 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-}
-
 size_t ThreadManager::getActiveThreadCount() const {
+    std::lock_guard<std::mutex> lock(queueMutex);
     return activeThreads;
-}
-
-void ThreadManager::workerThread() {
-    while (running) {
-        std::function<void()> task;
-        {
-            std::unique_lock<std::mutex> lock(queueMutex);
-            taskCondition.wait(lock, [this] { return !taskQueue.empty() || !running; });
-            
-            if (!running) break;
-
-            task = taskQueue.front();
-            taskQueue.pop();
-        }
-
-        ++activeThreads;
-        task();
-        --activeThreads;
-    }
 }
