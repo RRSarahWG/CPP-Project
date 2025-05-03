@@ -1,12 +1,12 @@
-#pragma once
+#ifndef THREAD_MANAGER_H
+#define THREAD_MANAGER_H
 
 #include <vector>
 #include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
 #include <functional>
 #include <queue>
+#include <atomic>
+#include <condition_variable>
 
 class ThreadManager {
 public:
@@ -15,31 +15,25 @@ public:
 
     void start();
     void stop();
-    void waitForCompletion(); 
-
-    void addTask(std::function<void()> task); 
-    size_t getTaskCount() const;
-
-    void setNumThreads(size_t numThreads);
+    void addTask(std::function<void()> task);
+    bool isRunning() const;
     size_t getNumThreads() const;
-
+    void setNumThreads(size_t newNumThreads);
+    size_t getTaskCount() const;
+    void waitForCompletion();
     size_t getActiveThreadCount() const;
 
-    bool isRunning() const;
-
 private:
-    void workerThread(size_t threadId); 
+    void workerThread();
+    void processNextTask();
 
-    void processNextTask(); 
-
+    size_t numThreads;
     std::vector<std::thread> threads;
     std::queue<std::function<void()>> taskQueue;
-    mutable std::mutex taskMutex;
-    mutable std::mutex completionMutex; 
+    std::atomic<bool> running;
+    std::atomic<size_t> activeThreads;
+    std::mutex queueMutex;
     std::condition_variable taskCondition;
-    std::atomic<bool> running{false};
-    std::atomic<size_t> activeThreads{0};
-    size_t numThreads;
-
-    std::vector<std::atomic<size_t>> threadLoads; 
 };
+
+#endif // THREAD_MANAGER_H
